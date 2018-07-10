@@ -55,7 +55,7 @@ spec:
         tier: jenkins
     spec:
       containers:
-      - image: chadmoon/jenkins-docker-kubectl:latest
+      - image: fknbwdwn/jenkins-docker-kubectl
         name: jenkins
         securityContext:
           privileged: true
@@ -67,6 +67,8 @@ spec:
           mountPath: /root/.jenkins
         - name: docker
           mountPath: /var/run/docker.sock
+      imagePullSecrets:
+      - name: regcred
       volumes:
       - name: docker
         hostPath:
