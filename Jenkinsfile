@@ -19,6 +19,10 @@ node {
     stage "Push"
 
         sh "docker push ${imageName}"
+    
+    stage "Smoke Test"
+    
+        sh "echo 'some bullshit here'
 
     stage "Deploy"
 
