@@ -23,6 +23,7 @@ node {
     stage "Smoke Test"
     
         sh "echo 'some bullshit here'"
+        input "Deploy to prod?"
 
     stage "Deploy"
 
