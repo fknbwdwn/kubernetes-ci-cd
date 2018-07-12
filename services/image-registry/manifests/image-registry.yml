@@ -1,0 +1,127 @@
+# Create ubernetes namespace
+# https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ubernetes
+---
+# Create 10GB persistent volume in ubernetes namespace
+# https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: image-registry
+  namespace: ubernetes
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce #-> Allow only one node to read or write to the volume
+#   - ReadOnlyMany  #-> Allow many nodes to read the volume
+#   - ReadWriteMany #-> Allow many nodes to read and write to the volume
+  hostPath:
+    path: "/data/image-registry/"
+---
+# Create 10GB persistent volume claim in ubernetes namespace
+# https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: image-registry
+  namespace: ubernetes
+spec:
+  accessModes:
+    - ReadWriteOnce #-> Allow only one node to read or write to the volume
+#   - ReadOnlyMany  #-> Allow many nodes to read the volume
+#   - ReadWriteMany #-> Allow many nodes to read and write to the volume
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Create the backend image-registry service in ubernetes namespace (maps internal port 5000 to public port 30400)
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-registry-backend
+  namespace: ubernetes
+  labels:
+    app: image-registry
+spec:
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30400
+      name: image-registry-backend
+  selector:
+    app: image-registry  #-> Must match name of app deployment
+    tier: sandbox #-> Must match name of tier in deployment
+  type: NodePort
+---
+# Create the frontend image-registry-ui service in ubernetes namespace (maps internal port 8080 to a random public high port)
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-registry-frontend
+  namespace: ubernetes
+  labels:
+    app: image-registry
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: image-registry-frontend
+  selector:
+    app: image-registry  #-> Must match name of app deployment
+    tier: sandbox        #-> Must match name of tier in deployment
+  type: NodePort
+---
+# Create the deployment for image-registry in ubernetes namespace (deploys backend and frontend)
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: image-registry
+  namespace: ubernetes
+  labels:
+    app: image-registry
+spec:
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: image-registry #-> Must match name of app in service selector
+        tier: sandbox       #-> Must match name of tier in service selector
+    spec:
+      containers: #-> Define pod members
+      - image: registry:2 #-> Create backend container from image
+        name: image-registry-backend
+        volumeMounts:
+        - name: docker #-> Must match declared volume name
+          mountPath: /var/run/docker.sock
+        - name: image-registry-persistent #-> Must match declared volume name
+          mountPath: /var/lib/registry
+        ports: #-> Expose private port 5000 for backend
+        - containerPort: 5000
+          name: backend
+      - image: hyper/docker-registry-web #-> Create frontend container from image
+        name: image-registry-frontend
+        ports:
+        - containerPort: 8080 #-> Expose private port 8080 for frontend
+          name: frontend
+        env:
+        - name: REGISTRY_URL
+          value: http://localhost:5000/v2
+        - name: REGISTRY_NAME
+          value: ubernetes-images
+      volumes:
+      - name: docker #-> Must match name defined in volumeMounts
+        hostPath:
+          path: /var/run/docker.sock
+      - name: image-registry-persistent #-> Must match name defined in volumeMounts
+        persistentVolumeClaim:
+          claimName: image-registry

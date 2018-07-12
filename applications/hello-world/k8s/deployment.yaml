@@ -1,0 +1,42 @@
+# Create the backend hello-world service in ubernetes namespace (maps internal port 80 to random high port)
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-world
+  namespace: ubernetes
+  labels:
+    app: hello-world
+spec:
+  ports:
+    - port: 80       #-> Source port
+      targetPort: 80 #-> Target port must match containerPort in deployment
+  selector:
+    app: hello-world #-> Must match name of app deployment
+    tier: sandbox    #-> Must match name of tier deployment
+  type: NodePort
+---
+# Create the deployment for hello-world in ubernetes namespace
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: hello-world
+  namespace: ubernetes
+  labels:
+    app: hello-world
+spec:
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: hello-world #-> Must match name of app in service selector
+        tier: sandbox    #-> Must match name of tier in service selector
+    spec:
+      containers:
+      - image: 127.0.0.1:30400/hello-world:latest
+        name: hello-world
+        ports:
+        - containerPort: 80 #-> Expose private container 80
+          name: hello-world

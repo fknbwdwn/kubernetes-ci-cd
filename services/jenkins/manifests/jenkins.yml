@@ -1,0 +1,89 @@
+# Create 10GB persistent volume in ubernetes namespace
+# https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: jenkins
+  namespace: ubernetes
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce #-> Allow only one node to read or write to the volume
+#   - ReadOnlyMany  #-> Allow many nodes to read the volume
+#   - ReadWriteMany #-> Allow many nodes to read and write to the volume
+  hostPath:
+    path: "/data/jenkins/"
+---
+# Create 10GB persistent volume claim in ubernetes namespace
+# https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: jenkins
+  namespace: ubernetes
+spec:
+  accessModes:
+    - ReadWriteOnce #-> Allow only one node to read or write to the volume
+#   - ReadOnlyMany  #-> Allow many nodes to read the volume
+#   - ReadWriteMany #-> Allow many nodes to read and write to the volume
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Create the jenkins service in ubernetes namespace (maps internal port 8080 (bound to pod port 80) to random public high port)
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+  namespace: ubernetes
+  labels:
+    app: jenkins
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: jenkins  #-> Must match name of app deployment
+    tier: sandbox #-> Must match name of tier in deployment
+  type: NodePort
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: ubernetes
+  labels:
+    app: jenkins
+spec:
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: jenkins  #-> Must match name of app in service selector
+        tier: sandbox #-> Must match name of tier in service selector
+    spec:
+      containers:
+      - image: 127.0.0.1:30400/jenkins:latest #-> Create Jenkins container from image
+        name: jenkins
+        securityContext:
+          privileged: true
+        ports:
+        - containerPort: 8080 #-> Must match targetPort in service definition
+          name: jenkins
+        volumeMounts:
+        - name: jenkins-persistent #-> Must match declared volume name
+          mountPath: /root/.jenkins
+        - name: docker #-> Must match declared volume name
+          mountPath: /var/run/docker.sock
+      volumes:
+      - name: docker #-> Must match name defined in volumeMounts
+        hostPath:
+          path: /var/run/docker.sock
+      - name: jenkins-persistent #-> Must match name defined in volumeMounts
+        persistentVolumeClaim:
+          claimName: jenkins
